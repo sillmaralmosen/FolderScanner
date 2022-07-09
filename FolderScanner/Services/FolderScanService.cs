@@ -24,11 +24,9 @@ namespace FolderScanner.Services
 
             string[] tempFiles = await Task.Run<string[]>(() => Directory.GetFileSystemEntries(programTempPath, "*", SearchOption.AllDirectories));
 
-            var folderTempModels = new List<KeyValuePair<string,FolderModel>>(); //KeyValuePair<FolderModel, string>  -- ošetřit cestu pro reuložení
+            var folderTempModels = new List<KeyValuePair<string,FolderModel>>();
 
-     
             await tempFiles.ForEachAsync(async x => folderTempModels.Add(new KeyValuePair<string, FolderModel>(x,await Task.Run(async () => JsonConvert.DeserializeObject<FolderModel>(await File.ReadAllTextAsync(x))))));
-
 
             var actualFolderModel = await Scan(path);
 
@@ -38,28 +36,28 @@ namespace FolderScanner.Services
             }
             else
             {
-                var oldFolderModel = folderTempModels.Where(x => x.Value.Path == path).FirstOrDefault();
+                var previousFolderModel = folderTempModels.Where(x => x.Value.Path == path).FirstOrDefault();
 
-                actualFolderModel.ChildrenFiles.Where(x => oldFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path && x.Hash != null && y.Hash != null && !FilesAreEqual_Hash(y.Hash, x.Hash)).Any()).ToList()
+                actualFolderModel.ChildrenFiles.Where(x => previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path && x.Hash != null && y.Hash != null && !FilesAreEqual_Hash(y.Hash, x.Hash)).Any()).ToList()
                     .ForEach(x =>
                     {
-                        x.Version = oldFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path).FirstOrDefault().Version + 1;
+                        x.Version = previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path).FirstOrDefault().Version + 1;
                         response.AddAction(ActionType.Modified, x.Path, x.Version);
                     });
 
-                oldFolderModel.Value.ChildrenFiles.Where(x => !actualFolderModel.ChildrenFiles.Where(y => y.Path == x.Path).Any()).ToList()
+                previousFolderModel.Value.ChildrenFiles.Where(x => !actualFolderModel.ChildrenFiles.Where(y => y.Path == x.Path).Any()).ToList()
                           .ForEach(x =>
                           {
                               response.AddAction(ActionType.Deleted, x.Path);
                           });
 
-                actualFolderModel.ChildrenFiles.Where(x => !oldFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path).Any()).ToList()
+                actualFolderModel.ChildrenFiles.Where(x => !previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path).Any()).ToList()
                   .ForEach(x =>
                   {
                       response.AddAction(ActionType.Added, x.Path, x.Version);
                   });
 
-                File.WriteAllText(oldFolderModel.Key, JsonConvert.SerializeObject(actualFolderModel));   
+                File.WriteAllText(previousFolderModel.Key, JsonConvert.SerializeObject(actualFolderModel));   
             }
             return response;
         }
