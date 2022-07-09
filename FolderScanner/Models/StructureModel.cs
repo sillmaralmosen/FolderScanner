@@ -4,8 +4,7 @@ namespace FolderScanner.Models
 {
     public abstract class BaseModel
     {
-        public string Path { get; set; }
-        
+        public string Path { get; set; }  
     }
 
     public class Filemodel : BaseModel
@@ -29,6 +28,7 @@ namespace FolderScanner.Models
             Hash = hash;
             Version = version;
         }
+
         public byte[]? Hash { get; set; }
         public int? Version { get; set; }
     }

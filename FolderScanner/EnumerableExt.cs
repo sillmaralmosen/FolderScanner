@@ -23,24 +23,5 @@ namespace FolderScanner
             foreach (T obj in input)
                 await action(obj);
         }
-
-        public static IEnumerable<T> Traverse<T>(
-          this IEnumerable<T> items,
-          Func<T, IEnumerable<T>> childSelector)
-        {
-            Stack<T> stack = new Stack<T>(items);
-            while (stack.Any<T>())
-            {
-                T next = stack.Pop();
-                yield return next;
-                IEnumerable<T> objs = childSelector(next);
-                if (objs != null)
-                {
-                    foreach (T obj in objs)
-                        stack.Push(obj);
-                    next = default(T);
-                }
-            }
-        }
     }
 }

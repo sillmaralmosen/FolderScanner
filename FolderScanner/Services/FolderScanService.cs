@@ -62,8 +62,6 @@ namespace FolderScanner.Services
             return response;
         }
 
-   
-
         public async Task<FolderModel> Scan(string path)
         {
            var folderModel = new FolderModel()
@@ -92,7 +90,6 @@ namespace FolderScanner.Services
             folderModel.ChildrenFiles = childrenFiles;
 
             return folderModel;
-
         }
 
         static bool FilesAreEqual_Hash(byte[] firstHash, byte[] secondHash)
