@@ -19,8 +19,8 @@ namespace FolderScanner.Controllers
             _folderScanService = folderScanService;
         }
 
-        [HttpGet("{Path}/GetFilesChanges")]
-        public async Task<FolderResponse> GetFilesChanges([FromRoute]FolderRequest request)=>await _folderScanService.Compare(request.Path); 
+        [HttpPost("GetFilesChanges")]
+        public async Task<FolderResponse> GetFilesChanges([FromBody] FolderRequest request) => await _folderScanService.Compare(request.Path); 
         
     }
 }

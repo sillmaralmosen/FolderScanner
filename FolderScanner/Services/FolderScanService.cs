@@ -9,55 +9,91 @@ namespace FolderScanner.Services
 {
     public class FolderScanService : IFolderScanService
     {
-        public static string programTempPath;
+        public static string? programTempPath;
 
         public async Task<FolderResponse> Compare(string path)
         {
             if (!Directory.Exists(path))
                 throw new Exception("Directory not exists");
 
-            programTempPath = AppDomain.CurrentDomain.BaseDirectory + "temp\\";
-            var response = new FolderResponse();
+            programTempPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "temp");
 
             if (!Directory.Exists(programTempPath))
-                Directory.CreateDirectory(programTempPath);
+            {
+                try
+                {
+                    Directory.CreateDirectory(programTempPath);
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(ex.Message);
+                };
+            }
 
             string[] tempFiles = await Task.Run<string[]>(() => Directory.GetFileSystemEntries(programTempPath, "*", SearchOption.AllDirectories));
 
             var folderTempModels = new List<KeyValuePair<string,FolderModel>>();
 
-            await tempFiles.ForEachAsync(async x => folderTempModels.Add(new KeyValuePair<string, FolderModel>(x,await Task.Run(async () => JsonConvert.DeserializeObject<FolderModel>(await File.ReadAllTextAsync(x))))));
+            await tempFiles.ForEachAsync(async x =>
+            {
+                var value = JsonConvert.DeserializeObject<FolderModel>(await File.ReadAllTextAsync(x));
+                if (value != null)
+                    folderTempModels.Add(new KeyValuePair<string, FolderModel>(x, value));
+            });
 
             var actualFolderModel = await Scan(path);
 
+            var response = new FolderResponse();
+
             if (!folderTempModels.Where(x => x.Value.Path == path).Any())
             {
-                File.WriteAllText(programTempPath + "Temp" + (tempFiles.Count() + 1) + ".json", JsonConvert.SerializeObject(actualFolderModel));
+                try
+                {
+                    File.WriteAllText(Path.Combine(programTempPath,"Temp" + (tempFiles.Count() + 1) + ".json"), JsonConvert.SerializeObject(actualFolderModel));
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(ex.Message);
+                };
             }
             else
             {
                 var previousFolderModel = folderTempModels.Where(x => x.Value.Path == path).FirstOrDefault();
+                if (previousFolderModel.Value?.ChildrenFiles != null && actualFolderModel?.ChildrenFiles != null)
+                {
+                    actualFolderModel.ChildrenFiles
+                        .Where(x => previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path && x.Hash != null && y.Hash != null && !FilesAreEqualHash(y.Hash, x.Hash)).Any())
+                        .ToList()
+                        .ForEach(x =>
+                        {
+                            x.Version = (previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path).FirstOrDefault()?.Version ?? 0) + 1;
+                            response.AddAction(ActionType.Modified, x.Path, x.Version);
+                        });
 
-                actualFolderModel.ChildrenFiles.Where(x => previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path && x.Hash != null && y.Hash != null && !FilesAreEqual_Hash(y.Hash, x.Hash)).Any()).ToList()
-                    .ForEach(x =>
-                    {
-                        x.Version = previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path).FirstOrDefault().Version + 1;
-                        response.AddAction(ActionType.Modified, x.Path, x.Version);
-                    });
+                    previousFolderModel.Value.ChildrenFiles
+                        .Where(x => !actualFolderModel.ChildrenFiles.Where(y => y.Path == x.Path).Any())
+                        .ToList()
+                        .ForEach(x =>
+                        {
+                            response.AddAction(ActionType.Deleted, x.Path);
+                        });
 
-                previousFolderModel.Value.ChildrenFiles.Where(x => !actualFolderModel.ChildrenFiles.Where(y => y.Path == x.Path).Any()).ToList()
-                          .ForEach(x =>
-                          {
-                              response.AddAction(ActionType.Deleted, x.Path);
-                          });
+                    actualFolderModel.ChildrenFiles.Where(x => !previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path).Any())
+                        .ToList()
+                        .ForEach(x =>
+                        {
+                            response.AddAction(ActionType.Added, x.Path, x.Version);
+                        });
+                }
 
-                actualFolderModel.ChildrenFiles.Where(x => !previousFolderModel.Value.ChildrenFiles.Where(y => y.Path == x.Path).Any()).ToList()
-                  .ForEach(x =>
-                  {
-                      response.AddAction(ActionType.Added, x.Path, x.Version);
-                  });
-
-                File.WriteAllText(previousFolderModel.Key, JsonConvert.SerializeObject(actualFolderModel));   
+                try
+                {
+                    File.WriteAllText(previousFolderModel.Key, JsonConvert.SerializeObject(actualFolderModel));
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(ex.Message);
+                };
             }
             return response;
         }
@@ -92,7 +128,7 @@ namespace FolderScanner.Services
             return folderModel;
         }
 
-        static bool FilesAreEqual_Hash(byte[] firstHash, byte[] secondHash)
+        static bool FilesAreEqualHash(byte[] firstHash, byte[] secondHash)
         {
             for (int i = 0; i < firstHash.Length; i++)
             {
